@@ -1,0 +1,5 @@
+{
+  "name": "AppPrompt.Architect",
+  "description": "A sophisticated Prompt Construction Wizard that interviews developers to generate high-fidelity 'Master Prompts' for LLM-assisted software development.",
+  "requestFramePermissions": []
+}
