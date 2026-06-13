@@ -7,7 +7,7 @@
 ## Features
 
 - Interactive multi-step wizard for project requirements
-- **Dual AI provider support** — choose between Google Gemini and Anthropic Claude per session
+- **Triple AI provider support** — choose between Google Gemini, Anthropic Claude, and OpenAI per session
 - **AI-powered tech stack suggestions** — let the selected AI recommend a stack based on your project description
 - Per-step input validation with inline error messages
 - Export generated prompts as **Markdown** or **JSON**
@@ -26,9 +26,9 @@
 │  (Vite, port 3000)  │ ──────▶│      (Node, port 3001)   │
 └─────────────────────┘        └──────────┬───────────────┘
                                            │
-                              ┌────────────┴────────────┐
-                              │                         │
-                     Google Gemini API      Anthropic Claude API
+                         ┌─────────────┴─────────────┐
+                         │             │             │
+                  Google Gemini   Anthropic Claude   OpenAI GPT-4o
 ```
 
 The Vite dev server proxies all `/api` requests to the Express backend, so API keys are never bundled into the client.
@@ -41,7 +41,7 @@ The Vite dev server proxies all `/api` requests to the Express backend, so API k
 |---|---|
 | Frontend | React 19, TypeScript, Vite 8 |
 | Backend | Node.js, Express 4 |
-| AI Providers | Google Gemini (`gemini-2.5-flash`), Anthropic Claude (`claude-opus-4-8`) |
+| AI Providers | Google Gemini (`gemini-2.5-flash`), Anthropic Claude (`claude-opus-4-8`), OpenAI (`gpt-4o`) |
 | Styling | Tailwind CSS |
 
 ---
@@ -51,7 +51,7 @@ The Vite dev server proxies all `/api` requests to the Express backend, so API k
 ### Prerequisites
 
 - Node.js v18+
-- At least one of: a Google Gemini API key or an Anthropic API key
+- At least one AI provider API key (Gemini, Claude, or OpenAI)
 
 ### Installation
 
@@ -73,6 +73,9 @@ GEMINI_API_KEY=your-gemini-key
 
 # Required for Claude provider
 ANTHROPIC_API_KEY=your-anthropic-key
+
+# Required for OpenAI provider
+OPENAI_API_KEY=your-openai-key
 
 # Optional — defaults shown
 PORT=3001
@@ -106,7 +109,7 @@ npm run build     # Vite production build → dist/
 
 ## Usage
 
-1. Select your AI provider (Gemini or Claude) from the sidebar or the header toggle on mobile.
+1. Select your AI provider (Gemini, Claude, or OpenAI) from the sidebar or tap the provider chip on mobile to cycle through them.
 2. Work through the four wizard steps:
    - **Project Basics** — name, type, audience, description
    - **Tech Stack** — pick a preset, use AI suggestion, or fill in manually
