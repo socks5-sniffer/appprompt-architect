@@ -1,4 +1,3 @@
-
 export enum AppStep {
   BASICS = 0,
   TECH_STACK = 1,
@@ -16,6 +15,8 @@ export enum ProjectType {
   GAME = 'Game',
   OTHER = 'Other'
 }
+
+export type AIProvider = 'gemini' | 'claude';
 
 export interface TechStack {
   frontend: string;
