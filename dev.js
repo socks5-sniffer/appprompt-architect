@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-// Starts the API server and Vite dev server in parallel.
+// Starts the API server and Vite dev server in parallel (cross-platform).
 import { spawn } from 'child_process';
 
+const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
 const procs = [
-  spawn('node', ['server/index.js'], { stdio: 'inherit', env: { ...process.env, FORCE_COLOR: '1' } }),
-  spawn('node', ['node_modules/.bin/vite'], { stdio: 'inherit', env: { ...process.env, FORCE_COLOR: '1' } })
+  spawn(npm, ['run', 'dev:api'], { stdio: 'inherit' }),
+  spawn(npm, ['run', 'dev:web'], { stdio: 'inherit' })
 ];
 
 const shutdown = () => procs.forEach(p => p.kill());
