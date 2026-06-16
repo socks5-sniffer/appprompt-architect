@@ -16,7 +16,7 @@ export enum ProjectType {
   OTHER = 'Other'
 }
 
-export type AIProvider = 'gemini' | 'claude';
+export type AIProvider = 'gemini' | 'claude' | 'openai';
 
 export interface TechStack {
   frontend: string;

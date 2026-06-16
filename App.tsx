@@ -8,8 +8,11 @@ const STEP_LABELS = ["Basics", "Tech Stack", "Features", "Constraints", "Review"
 
 const PROVIDER_CONFIG: Record<AIProvider, { label: string; color: string; dot: string }> = {
   gemini: { label: 'Gemini', color: 'text-blue-400', dot: 'bg-blue-400' },
-  claude: { label: 'Claude', color: 'text-orange-400', dot: 'bg-orange-400' }
+  claude: { label: 'Claude', color: 'text-orange-400', dot: 'bg-orange-400' },
+  openai: { label: 'OpenAI', color: 'text-green-400', dot: 'bg-green-400' }
 };
+
+const PROVIDERS = Object.keys(PROVIDER_CONFIG) as AIProvider[];
 
 function validateStep(step: AppStep, data: WizardData): StepErrors {
   const errors: StepErrors = {};
@@ -273,7 +276,7 @@ function App() {
             <span className="font-bold text-slate-200 text-sm">PromptArchitect</span>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => setProvider(p => p === 'gemini' ? 'claude' : 'gemini')}
+            <button onClick={() => setProvider(p => PROVIDERS[(PROVIDERS.indexOf(p) + 1) % PROVIDERS.length])}
               className={`text-xs font-medium px-2 py-1 rounded border border-dark-700 bg-dark-800 ${PROVIDER_CONFIG[provider].color}`}>
               {PROVIDER_CONFIG[provider].label}
             </button>
