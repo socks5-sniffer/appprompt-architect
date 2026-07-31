@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { GoogleGenAI, Type } from '@google/genai';
 import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { config } from 'dotenv';
 
 config();
@@ -132,16 +133,49 @@ async function suggestStackClaude(name, description, type) {
   return JSON.parse(clean);
 }
 
+async function runOpenAI(systemInstruction, userPrompt, maxTokens = 4096) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY is not configured on the server.');
+  const client = new OpenAI({ apiKey });
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o',
+    max_tokens: maxTokens,
+    messages: [
+      { role: 'system', content: systemInstruction },
+      { role: 'user', content: userPrompt }
+    ]
+  });
+  return response.choices[0]?.message?.content || '';
+}
+
+async function suggestStackOpenAI(name, description, type) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY is not configured on the server.');
+  const client = new OpenAI({ apiKey });
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o',
+    max_tokens: 512,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: 'You output only valid JSON.' },
+      { role: 'user', content: buildStackPrompt(name, description, type) }
+    ]
+  });
+  return JSON.parse(response.choices[0]?.message?.content || 'null');
+}
+
 app.post('/api/generate', async (req, res) => {
   try {
     const { provider, data } = req.body ?? {};
     if (!provider || !data) return res.status(400).json({ error: 'Missing provider or data.' });
-    if (!['gemini', 'claude'].includes(provider)) return res.status(400).json({ error: 'Invalid provider.' });
+    if (!['gemini', 'claude', 'openai'].includes(provider)) return res.status(400).json({ error: 'Invalid provider.' });
     const safe = sanitizeData(data);
     const userPrompt = buildGeneratePrompt(safe);
     const result = provider === 'gemini'
       ? await runGemini(SYSTEM_INSTRUCTION, userPrompt)
-      : await runClaude(SYSTEM_INSTRUCTION, userPrompt);
+      : provider === 'claude'
+        ? await runClaude(SYSTEM_INSTRUCTION, userPrompt)
+        : await runOpenAI(SYSTEM_INSTRUCTION, userPrompt);
     res.json({ result });
   } catch (err) {
     console.error('[/api/generate]', err.message);
@@ -153,10 +187,13 @@ app.post('/api/suggest-stack', async (req, res) => {
   try {
     const { provider, name, description, type } = req.body ?? {};
     if (!provider) return res.status(400).json({ error: 'Missing provider.' });
-    if (!['gemini', 'claude'].includes(provider)) return res.status(400).json({ error: 'Invalid provider.' });
+    if (!['gemini', 'claude', 'openai'].includes(provider)) return res.status(400).json({ error: 'Invalid provider.' });
+    const sName = sanitize(name, 200), sDesc = sanitize(description), sType = sanitize(type, 100);
     const result = provider === 'gemini'
-      ? await suggestStackGemini(sanitize(name, 200), sanitize(description), sanitize(type, 100))
-      : await suggestStackClaude(sanitize(name, 200), sanitize(description), sanitize(type, 100));
+      ? await suggestStackGemini(sName, sDesc, sType)
+      : provider === 'claude'
+        ? await suggestStackClaude(sName, sDesc, sType)
+        : await suggestStackOpenAI(sName, sDesc, sType);
     res.json({ result });
   } catch (err) {
     console.error('[/api/suggest-stack]', err.message);
