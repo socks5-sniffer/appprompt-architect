@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { AppStep, AIProvider, INITIAL_DATA, WizardData } from './types';
-import { generateMasterPrompt } from './services/aiService';
+import { streamMasterPrompt } from './services/aiService';
 import { BasicsStep, TechStackStep, FeaturesStep, ConstraintsStep, StepErrors } from './components/WizardSteps';
 import { Button } from './components/common';
 
@@ -65,13 +65,18 @@ function App() {
   const runGenerate = async () => {
     setGenerateError('');
     setIsGenerating(true);
+    setGeneratedPrompt('');
+    setEditablePrompt('');
+    setCurrentStep(AppStep.RESULT);
     try {
-      const result = await generateMasterPrompt(data, provider);
+      const result = await streamMasterPrompt(data, provider, (_chunk, fullText) => {
+        setEditablePrompt(fullText);
+      });
       setGeneratedPrompt(result);
       setEditablePrompt(result);
-      setCurrentStep(AppStep.RESULT);
     } catch (err: any) {
       setGenerateError(err.message || 'Generation failed. Check that the server is running.');
+      setCurrentStep(AppStep.REVIEW);
     } finally {
       setIsGenerating(false);
     }
@@ -191,20 +196,27 @@ function App() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-2xl font-bold text-white">Your Master Prompt</h2>
-                <p className="text-slate-500 text-sm mt-0.5">Generated with {PROVIDER_CONFIG[provider].label} - {editablePrompt.length.toLocaleString()} chars</p>
+                <p className="text-slate-500 text-sm mt-0.5">
+                  {isGenerating
+                    ? `Generating with ${PROVIDER_CONFIG[provider].label}...`
+                    : `Generated with ${PROVIDER_CONFIG[provider].label} - ${editablePrompt.length.toLocaleString()} chars`}
+                </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" onClick={handleCopy} className="text-sm py-2 px-4">{copied ? 'Copied' : 'Copy'}</Button>
-                <Button variant="secondary" onClick={handleDownloadMarkdown} className="text-sm py-2 px-4">.md</Button>
-                <Button variant="secondary" onClick={handleDownloadJSON} className="text-sm py-2 px-4">.json</Button>
-                <Button variant="secondary" onClick={() => setIsEditing(e => !e)} className="text-sm py-2 px-4">{isEditing ? 'Preview' : 'Edit'}</Button>
+                <Button variant="secondary" onClick={handleCopy} disabled={isGenerating} className="text-sm py-2 px-4">{copied ? 'Copied' : 'Copy'}</Button>
+                <Button variant="secondary" onClick={handleDownloadMarkdown} disabled={isGenerating} className="text-sm py-2 px-4">.md</Button>
+                <Button variant="secondary" onClick={handleDownloadJSON} disabled={isGenerating} className="text-sm py-2 px-4">.json</Button>
+                <Button variant="secondary" onClick={() => setIsEditing(e => !e)} disabled={isGenerating} className="text-sm py-2 px-4">{isEditing ? 'Preview' : 'Edit'}</Button>
               </div>
             </div>
             {isEditing ? (
               <textarea value={editablePrompt} onChange={(e) => setEditablePrompt(e.target.value)}
                 className="w-full bg-dark-900 border border-dark-800 rounded-lg p-6 font-mono text-sm leading-relaxed text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary-500 min-h-[50vh]" />
             ) : (
-              <div className="bg-dark-900 rounded-lg p-6 border border-dark-800 font-mono text-sm leading-relaxed whitespace-pre-wrap text-slate-300 overflow-x-auto max-h-[60vh] overflow-y-auto">{editablePrompt}</div>
+              <div className="bg-dark-900 rounded-lg p-6 border border-dark-800 font-mono text-sm leading-relaxed whitespace-pre-wrap text-slate-300 overflow-x-auto max-h-[60vh] overflow-y-auto">
+                {editablePrompt}
+                {isGenerating && <span className="inline-block w-2 h-4 bg-primary-500 ml-0.5 animate-pulse align-text-bottom" />}
+              </div>
             )}
             <div className="flex gap-3">
               <Button variant="ghost" onClick={handleRegenerate} disabled={isGenerating} className="text-sm">

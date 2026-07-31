@@ -13,7 +13,7 @@ export const generateMasterPrompt = async (data: WizardData): Promise<string> =>
 
   const systemInstruction = `
     You are a Staff Principal Engineer and Architect with 20+ years of experience.
-    Your task is to take a set of raw requirements and turn them into a comprehensive, high-fidelity "Master Prompt" that a developer can feed into an LLM (like Claude 3.5 Sonnet or Gemini 1.5 Pro) to build the software.
+    Your task is to take a set of raw requirements and turn them into a comprehensive, high-fidelity "Master Prompt" that a developer can feed into an LLM (like Claude Opus 5 or other advanced models) to build the software.
 
     The Master Prompt you generate must include:
     1. **Role Definition**: Tell the LLM exactly who it is (e.g., "Act as an Expert Full Stack Developer...").

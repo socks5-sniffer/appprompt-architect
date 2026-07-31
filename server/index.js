@@ -7,6 +7,13 @@ import { config } from 'dotenv';
 
 config();
 
+// Model IDs are overridable via env so a provider migration is a .env edit, not a code change.
+const MODELS = {
+  gemini: process.env.GEMINI_MODEL || 'gemini-3.6-flash',
+  claude: process.env.CLAUDE_MODEL || 'claude-sonnet-5',
+  openai: process.env.OPENAI_MODEL || 'gpt-5.6-terra'
+};
+
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 
@@ -80,25 +87,27 @@ async function runGemini(systemInstruction, userPrompt) {
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on the server.');
   const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: MODELS.gemini,
     contents: userPrompt,
     config: { systemInstruction, temperature: 0.7 }
   });
   return response.text || '';
 }
 
-async function runClaude(systemInstruction, userPrompt, maxTokens = 4096) {
+async function runClaude(systemInstruction, userPrompt, { maxTokens = 8192, disableThinking = false } = {}) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured on the server.');
   const client = new Anthropic({ apiKey });
   const message = await client.messages.create({
-    model: 'claude-opus-4-8',
+    model: MODELS.claude,
     max_tokens: maxTokens,
+    ...(disableThinking ? { thinking: { type: 'disabled' } } : {}),
     system: systemInstruction,
     messages: [{ role: 'user', content: userPrompt }]
   });
-  const block = message.content[0];
-  return block?.type === 'text' ? block.text : '';
+  // claude-sonnet-5 thinks by default, so content[0] may be a thinking block, not text.
+  const textBlock = message.content.find(b => b.type === 'text');
+  return textBlock?.text || '';
 }
 
 async function suggestStackGemini(name, description, type) {
@@ -106,7 +115,7 @@ async function suggestStackGemini(name, description, type) {
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on the server.');
   const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: MODELS.gemini,
     contents: buildStackPrompt(name, description, type),
     config: {
       responseMimeType: 'application/json',
@@ -128,23 +137,26 @@ async function suggestStackGemini(name, description, type) {
 }
 
 async function suggestStackClaude(name, description, type) {
-  const text = await runClaude('', buildStackPrompt(name, description, type), 512);
+  const text = await runClaude('', buildStackPrompt(name, description, type), { maxTokens: 1024, disableThinking: true });
   const clean = text.replace(/```json\n?|```\n?/g, '').trim();
   return JSON.parse(clean);
 }
 
-async function runOpenAI(systemInstruction, userPrompt, maxTokens = 4096) {
+async function runOpenAI(systemInstruction, userPrompt, maxTokens = 8192) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY is not configured on the server.');
   const client = new OpenAI({ apiKey });
   const response = await client.chat.completions.create({
-    model: 'gpt-4o',
-    max_tokens: maxTokens,
+    model: MODELS.openai,
+    max_completion_tokens: maxTokens,
+    reasoning_effort: 'low',
     messages: [
       { role: 'system', content: systemInstruction },
       { role: 'user', content: userPrompt }
     ]
   });
+  // Reasoning models can burn the whole token budget on hidden reasoning
+  // and return empty content if max_completion_tokens is too tight.
   return response.choices[0]?.message?.content || '';
 }
 
@@ -153,8 +165,9 @@ async function suggestStackOpenAI(name, description, type) {
   if (!apiKey) throw new Error('OPENAI_API_KEY is not configured on the server.');
   const client = new OpenAI({ apiKey });
   const response = await client.chat.completions.create({
-    model: 'gpt-4o',
-    max_tokens: 512,
+    model: MODELS.openai,
+    max_completion_tokens: 1024,
+    reasoning_effort: 'minimal',
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: 'You output only valid JSON.' },
@@ -163,6 +176,87 @@ async function suggestStackOpenAI(name, description, type) {
   });
   return JSON.parse(response.choices[0]?.message?.content || 'null');
 }
+
+async function streamGemini(systemInstruction, userPrompt, onChunk) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured on the server.');
+  const ai = new GoogleGenAI({ apiKey });
+  const stream = await ai.models.generateContentStream({
+    model: MODELS.gemini,
+    contents: userPrompt,
+    config: { systemInstruction, temperature: 0.7 }
+  });
+  for await (const chunk of stream) {
+    if (chunk.text) onChunk(chunk.text);
+  }
+}
+
+async function streamClaude(systemInstruction, userPrompt, onChunk) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured on the server.');
+  const client = new Anthropic({ apiKey });
+  const stream = client.messages.stream({
+    model: MODELS.claude,
+    max_tokens: 8192,
+    system: systemInstruction,
+    messages: [{ role: 'user', content: userPrompt }]
+  });
+  // 'text' fires only for visible text deltas — thinking deltas are a separate event.
+  stream.on('text', (delta) => onChunk(delta));
+  await stream.finalMessage();
+}
+
+async function streamOpenAI(systemInstruction, userPrompt, onChunk) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY is not configured on the server.');
+  const client = new OpenAI({ apiKey });
+  const stream = await client.chat.completions.create({
+    model: MODELS.openai,
+    max_completion_tokens: 8192,
+    reasoning_effort: 'low',
+    stream: true,
+    messages: [
+      { role: 'system', content: systemInstruction },
+      { role: 'user', content: userPrompt }
+    ]
+  });
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content;
+    if (delta) onChunk(delta);
+  }
+}
+
+app.post('/api/generate/stream', async (req, res) => {
+  const { provider, data } = req.body ?? {};
+  if (!provider || !data) return res.status(400).json({ error: 'Missing provider or data.' });
+  if (!['gemini', 'claude', 'openai'].includes(provider)) return res.status(400).json({ error: 'Invalid provider.' });
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const send = (event, payload) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
+  };
+
+  try {
+    const safe = sanitizeData(data);
+    const userPrompt = buildGeneratePrompt(safe);
+    const onChunk = (text) => send('delta', { text });
+
+    if (provider === 'gemini') await streamGemini(SYSTEM_INSTRUCTION, userPrompt, onChunk);
+    else if (provider === 'claude') await streamClaude(SYSTEM_INSTRUCTION, userPrompt, onChunk);
+    else await streamOpenAI(SYSTEM_INSTRUCTION, userPrompt, onChunk);
+
+    send('done', {});
+  } catch (err) {
+    console.error('[/api/generate/stream]', err.message);
+    send('error', { error: err.message || 'Generation failed.' });
+  } finally {
+    res.end();
+  }
+});
 
 app.post('/api/generate', async (req, res) => {
   try {

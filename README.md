@@ -8,6 +8,7 @@
 
 - Interactive multi-step wizard for project requirements
 - **Triple AI provider support** — choose between Google Gemini, Anthropic Claude, and OpenAI per session
+- **Streamed generation** — the Master Prompt renders token-by-token as it's generated, instead of a blocking spinner
 - **AI-powered tech stack suggestions** — let the selected AI recommend a stack based on your project description
 - Per-step input validation with inline error messages
 - Export generated prompts as **Markdown** or **JSON**
@@ -28,10 +29,10 @@
                                            │
                          ┌─────────────┴─────────────┐
                          │             │             │
-                  Google Gemini   Anthropic Claude   OpenAI GPT-4o
+                  Google Gemini   Anthropic Claude   OpenAI GPT-5.6
 ```
 
-The Vite dev server proxies all `/api` requests to the Express backend, so API keys are never bundled into the client.
+The Vite dev server proxies all `/api` requests to the Express backend, so API keys are never bundled into the client. Master Prompt generation streams over Server-Sent Events (`POST /api/generate/stream`); tech-stack suggestions use a plain JSON round trip (`POST /api/suggest-stack`).
 
 ---
 
@@ -41,7 +42,7 @@ The Vite dev server proxies all `/api` requests to the Express backend, so API k
 |---|---|
 | Frontend | React 19, TypeScript, Vite 8 |
 | Backend | Node.js, Express 4 |
-| AI Providers | Google Gemini (`gemini-2.5-flash`), Anthropic Claude (`claude-opus-4-8`), OpenAI (`gpt-4o`) |
+| AI Providers | Google Gemini (`gemini-3.6-flash`), Anthropic Claude (`claude-sonnet-5`), OpenAI (`gpt-5.6-terra`) |
 | Styling | Tailwind CSS |
 
 ---
@@ -80,9 +81,14 @@ OPENAI_API_KEY=your-openai-key
 # Optional — defaults shown
 PORT=3001
 FRONTEND_URL=http://localhost:3000
+
+# Optional model overrides — defaults shown
+GEMINI_MODEL=gemini-3.6-flash
+CLAUDE_MODEL=claude-sonnet-5
+OPENAI_MODEL=gpt-5.6-terra
 ```
 
-You only need the key for the provider(s) you intend to use.
+You only need the key for the provider(s) you intend to use. Model IDs are read from the environment (`server/index.js`), so upgrading a provider's model is a `.env` edit — no code change required.
 
 ### Local Development
 
