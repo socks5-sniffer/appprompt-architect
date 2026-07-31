@@ -1,9 +1,15 @@
 import { WizardData, TechStack, AIProvider } from '../types';
 
+// Only needed if the server sets API_SHARED_SECRET (see server/index.js). Unset in local dev.
+const apiHeaders: HeadersInit = {
+  'Content-Type': 'application/json',
+  ...(import.meta.env.VITE_API_SHARED_SECRET ? { 'x-api-secret': import.meta.env.VITE_API_SHARED_SECRET } : {})
+};
+
 async function apiFetch<T>(path: string, body: object): Promise<T> {
   const res = await fetch(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: apiHeaders,
     body: JSON.stringify(body)
   });
   const json = await res.json();
@@ -30,7 +36,7 @@ export const streamMasterPrompt = async (
 ): Promise<string> => {
   const res = await fetch('/api/generate/stream', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: apiHeaders,
     body: JSON.stringify({ provider, data })
   });
 

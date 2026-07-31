@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { GoogleGenAI, Type } from '@google/genai';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
@@ -28,6 +29,27 @@ app.use(cors({
   },
   methods: ['POST']
 }));
+
+// These endpoints call metered provider APIs, so cap request rate per IP regardless of auth.
+const apiLimiter = rateLimit({
+  windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  limit: Number(process.env.RATE_LIMIT_MAX) || 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again later.' }
+});
+app.use('/api/', apiLimiter);
+
+// Optional shared-secret gate for deployments reachable beyond localhost. No-op if unset.
+const API_SHARED_SECRET = process.env.API_SHARED_SECRET;
+if (API_SHARED_SECRET) {
+  app.use('/api/', (req, res, next) => {
+    if (req.get('x-api-secret') !== API_SHARED_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized.' });
+    }
+    next();
+  });
+}
 
 const SYSTEM_INSTRUCTION = `
 You are a Staff Principal Engineer and Architect with 20+ years of experience.
